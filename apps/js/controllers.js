@@ -1,454 +1,470 @@
-Sudoku.controller('SudokuController', function SudokuController($scope, $http) {
-	$http.get("data/rows.json").success(function(data) {
-		$scope.rows = jQuery.extend(true, [], data);		
-		$scope.rows_clear = jQuery.extend(true, [], data);
-		$scope.rows_save = jQuery.extend([], data);	
-		$scope.current_possibilities = [];	
+Sudoku.controller('SudokuController', function SudokuController($scope, data) {
+	'use strict';
+
+	$scope.rows = angular.copy(data);	
+	$scope.rows_save = angular.copy(data);	
+	$scope.current_possibilities = [];
+
+    /**
+     * Creates an empty grid.
+     */
+	function createEmptyRows() {
+		var rows = angular.copy(data);
 		for (var l=0; l<9; l++)
 			for(var c=0; c<9; c++){
-				$scope.rows_clear[l].columns[c].value = "";
-				$scope.rows_clear[l].columns[c].class = "";
-			}		
-	});
-	
-	function is_solved(rows)
+				rows[l].columns[c].value = "";
+				rows[l].columns[c].class = "";
+			}
+		return rows;
+	}
+
+    /**
+     * Checks if the current grid is solved.
+     */
+	function isSolved(rows)
 	{
-		for(var i=0; i<9; i++)
-		for(var k=0; k<9; k++)
-		if(rows[i].columns[k].value == "")
-			return false;
+		for(var i = 0; i < 9; i++)
+			for(var k=0; k<9; k++)
+				if(rows[i].columns[k].value === "")
+					return false;
 		return true;
-	}	
-	
-	function change_class (old_class, new_class) {
-        if (old_class == "correct")
+	}
+
+    /**
+     * Checks and changes the class of the current cell.
+     */
+	function changeClass(old_class, new_class) {
+        if (old_class === "correct")
         	return old_class;
         else
         	return new_class;        
-    };
-    
-    function get_row_column_edges(row_id, column_id){
-    	var i = row_id / 3;
-	    var row_min = 0;
-	    var row_max = 0;
-	    if (i < 1){
-	    	row_min = 0;
-	    	row_max = 3;
-	    }		    	
-		else{
-		 if(i < 2){
-		    	row_min = 3;
-		    	row_max = 6;
-		    }
-		 else if(i < 3){
-		    	row_min = 6;
-		    	row_max = 9;
-		    }
-		}   
-		var i = column_id / 3;
-	    var column_min = 0;
-	    var column_max = 0;
-	    if (i < 1){
-	    	column_min = 0;
-	    	column_max = 3;
-	    }		    	
-		else{
-		 if(i < 2){
-		    	column_min = 3;
-		    	column_max = 6;
-		    }
-		 else if(i < 3){
-		    	column_min = 6;
-		    	column_max = 9;
-		    }
-		}
-		return [row_min,row_max,column_min,column_max];
-    };
-    
-    function get_possibilities(rows, row_id, column_id){ 		
-		var pos = [1,2,3,4,5,6,7,8,9];						
-		//check line
-		var indices = [];		
-		for(var i=0; i<pos.length; i++){				
-			for(var j=0; j<9; j++){														
-				if (pos[i] == rows[row_id].columns[j].value){
-					indices.push(i);						
-					j=9;
-				}				
-			} 
-		}						
-		for (var i=0; i<indices.length; i++){
-			var j = (i==0) ? indices[i] : indices[i]-i;			
-			pos.splice(j,1);
-		}								
-		//check column		
-		var indices = [];
-		for(var i=0; i<pos.length; i++){
-			for(var j=0; j<9; j++){
-				if (pos[i] == rows[j].columns[column_id].value){
-					indices.push(i);
-					j=9;
-				}
-			} 
-		}		
-		for (var i=0; i<indices.length; i++){
-			var j = (i==0) ? indices[i] : indices[i]-i;		
-			pos.splice(j,1);
-		}												
-		//check case
-		var indices = [];
-		var edges = get_row_column_edges(row_id, column_id)
-	    var row_min = edges[0];
-	    var row_max = edges[1];	    
-	    var column_min = edges[2];
-	    var column_max = edges[3];	    
-	    for(var i=0; i<pos.length; i++)
-		    for(var j=row_min; j<row_max; j++)
-	            for(var k=column_min; k<column_max; k++)
-	            {
-	                if (pos[i] == rows[j].columns[k].value){
-						indices.push(i);
-						j=9;
-						k=9;
-					}
-	            }
-		for (var i=0; i<indices.length; i++){
-			var j = (i==0) ? indices[i] : indices[i]-i;		
-			pos.splice(j,1);
-		}		     
+    }
+
+    /**
+     * Returns the max and min values of row/column based on coordinates.
+     *
+     *  e.g. rowId = 5, columnId = 4
+     *  x x x | x x x | x x x
+     *  x x x | x x x | x x x
+     *  x x x | x x x | x x x
+     *  - - -   - - -   - - -
+     *  x x x | x x x | x x x
+     *  x x x | x x x | x x x
+     *  x x x | x 0 x | x x x
+     *  - - -   - - -   - - -
+     *  x x x | x x x | x x x
+     *  x x x | x x x | x x x
+     *  x x x | x x x | x x x
+     *
+     *  returns {(3, 6), (3, 6)}
+     */
+    function getCaseEdgesByCoords(rowId, columnId){
+
+    	var _edges = function(id){
+    		var rest = Math.floor(id/3);
+    		return {min: rest * 3, max: rest * 3 + 3};
+    	};
+
+		return {
+			row: _edges(rowId),
+			column: _edges(columnId)
+		};
+    }
+
+    /**
+     * Return the max and min values of row/column based on case id.
+     *
+     * e.g. caseId = 3
+     *
+     *  X | X | X
+     *  -   -   -
+     *  O | X | X
+     *  -   -   -
+     *  X | X | X
+     *
+     *  returns {(3, 6), (0, 3)}
+     */
+    function getCaseEdgesById(caseId) {
+        var rowMin = Math.floor(caseId/3) * 3;
+        var columnMin = (caseId % 3) * 3;
+        return {
+            row: {
+                min: rowMin,
+                max: rowMin + 3
+            },
+            column: {
+                min: columnMin,
+                max: columnMin + 3
+            }
+        };
+    }
+
+    function removePossibilities(possibilities, indices) {
+        for (var i = 0; i < indices.length; i++){
+                var j = (i == 0) ? indices[i] : indices[i]-i;
+                possibilities.splice(j,1);
+            }
+    }
+
+    /**
+     * Returns the possibilities for a cell.
+     */
+    function getPossibilities(rows, rowId, columnId){
+		var pos = [1,2,3,4,5,6,7,8,9];
+
+        linePossibilities(rows, 'row', rowId, pos);
+        linePossibilities(rows, 'column', columnId, pos);
+
+        var caseEdges = getCaseEdgesByCoords(rowId, columnId);
+        casePossibilities(rows, caseEdges, pos);
+
 	    return pos;	    	       
     }
-    
-    function line_possibilities(rows, l){
-    	var pos = [1,2,3,4,5,6,7,8,9];
+
+    /**
+     * Returns possibilities of a cell, based on a vertical/horizontal line.
+     */
+    function linePossibilities(rows, direction, id, pos){
+        pos = (typeof pos === 'undefined') ? [1,2,3,4,5,6,7,8,9] : pos;
     	var indices = [];
-    	for(var p=0; p<9; p++)
-    		for(var c=0; c<9; c++){
-    			if (pos[p] == rows[l].columns[c].value){
-					indices.push(p);
-					c=9;
-				}
-    		}		
-		for (var i=0; i<indices.length; i++){
-			var j = (i==0) ? indices[i] : indices[i]-i;		
-			pos.splice(j,1);
-		}				
+
+        for(var i = 0; i < pos.length; i++){
+            for(var j = 0; j < 9; j++){
+                var positionValue;
+
+                if (direction === 'row')
+                    positionValue = rows[id].columns[j].value;
+                if (direction === 'column')
+                    positionValue = rows[j].columns[id].value;
+
+                if (pos[i] == positionValue){
+                    indices.push(i);
+                    j = 9;
+                }
+            }
+        }
+
+		removePossibilities(pos, indices);
+
 		return pos;
     }
-    
-    function column_possibilities(rows, c){    	
-    	var pos = [1,2,3,4,5,6,7,8,9];
-    	var indices = [];
-    	for(var p=0; p<9; p++)
-    		for(var l=0; l<9; l++){    		    			
-    			if (pos[p] == rows[l].columns[c].value){
-					indices.push(p);
-					l=9;
-				}
-    		}		
-		for (var i=0; i<indices.length; i++){
-			var j = (i==0) ? indices[i] : indices[i]-i;		
-			pos.splice(j,1);
-		}		
-		return pos;
-    }
-	    
-    function case_possibilities(rows, i){
-    	var c_line = Math.floor(i/3);
-		var c_column = i%3;		
-		c_line*=3;
-		c_column*=3;
-    	var pos = [1,2,3,4,5,6,7,8,9];
+
+    /**
+     * Returns the possibilities based on a case.
+     */
+    function casePossibilities(rows, edges, pos){
+        pos = (typeof pos === 'undefined') ? [1,2,3,4,5,6,7,8,9] : pos;
     	var indices = [];
     	for(var p=0; p<9; p++) 	    
-		    for(var j=c_line; j<(c_line+3); j++)
-	            for(var k=c_column; k<(c_column+3); k++)
+		    for(var j = edges.row.min; j < edges.row.max; j++)
+	            for(var k = edges.column.min; k < edges.column.max; k++)
 	            {
 	                if (pos[p] == rows[j].columns[k].value){
 						indices.push(p);
-						j=9;
+						j = 9;
 						k=9;
 					}
 	            }	
-		for (var i=0; i<indices.length; i++){
-			var j = (i==0) ? indices[i] : indices[i]-i;		
-			pos.splice(j,1);
-		}		
-		return pos
+		removePossibilities(pos, indices);
+		return pos;
     }
-    
-    function search_unique_cases(rows){
-    	stats = false;    	
-    	//line    	    	
-    	for(var l=0; l<9; l++){
-    		var line_pos = line_possibilities(rows, l);    		
-    		for(var p=0; p<line_pos.length; p++){
-    			var nbr_cells = 0; //nbr cells possibly receiving this value
-    			var mem_c = 0; //memorize the column that could receive this value
-    			for(var c=0; c<9 && nbr_cells<2; c++){
-    				if(rows[l].columns[c].value == ""){
-    					var m;//need to check if this value is a possibility for this cell    					
-						for(m=0; (m<rows[l].columns[c].possibilities.length && rows[l].columns[c].possibilities[m] != line_pos[p]); m++);
-						if(rows[l].columns[c].possibilities[m] == line_pos[p]){
-							nbr_cells++;
-							mem_c = c;
-						}													
-    				}
-    			}
-    			if(nbr_cells == 0)
-					return [false, stats];
-				if(nbr_cells == 1){
-					rows[l].columns[mem_c].value = line_pos[p]; 
-					stats=true;
-				}
-    		}
-    	}    	
-    	//column
-    	for(var c=0; c<9; c++){    	    			    	
-    		var column_pos = column_possibilities(rows, c);
-    		for(var p=0; p<column_pos.length; p++){
-    			var nbr_cells = 0; //nbr cells possibly receiving this value
-    			var mem_l = 0; //memorize the line that could receive this value
-    			for(var l=0; l<9 && nbr_cells<2; l++){
-    				if(rows[l].columns[c].value == ""){
-    					var m;//need to check if this value is a possibility for this cell
-						for(m=0; (m<rows[l].columns[c].possibilities.length && rows[l].columns[c].possibilities[m] != column_pos[p] ); m++);
-						if(rows[l].columns[c].possibilities[m] == column_pos[p]){
-							nbr_cells++;
-							mem_l = l;
-						}												
-    				}
-    			}
-    			if(nbr_cells == 0)
-					return [false, stats];
-				if(nbr_cells == 1){
-					rows[mem_l].columns[c].value = column_pos[p]; 
-					stats=true;
-				}
-    		}
-    	}    	
+
+    /**
+     * Searches for cells with unique possibilities.
+     * Return a tuple (state1, state2):
+     *     * state1: whether the grid is solvable or not.
+     *     * state2: whether it check for more cells with unique possibilities.
+     */
+    function searchUniquePossibilities(rows){
+    	var gridUpdated = false;
+        
+        var lineSearch = function(direction) {
+
+            var _checkPerpondicularDirection = function(){
+                for(var j=0; j<9 && nbrCell<2; j++){
+                    var cell = (direction === "row") ? rows[i].columns[j] : rows[j].columns[i];
+                    if(cell.value == ""){
+                        // we need to check if this value is a possibility for this cell
+                        for(var m=0; (m < cell.possibilities.length && cell.possibilities[m] != line_pos[p]); m++);
+                            if(cell.possibilities[m] == line_pos[p]){
+                                nbrCell++;
+                                memCell = j;
+                            }
+                    }
+                }
+            };
+
+            for(var i=0; i<9; i++){
+                // for each cell of this line get possibilities.
+                var line_pos = linePossibilities(rows, direction, i);
+                
+                for(var p=0; p<line_pos.length; p++){ // for each possibility
+                    var nbrCell = 0; // check nbr cells possibly receiving this value
+                    var memCell = 0; // memorize the cell that could receive this value
+                    
+                    _checkPerpondicularDirection();
+
+                    if(nbrCell == 0)
+                        return false;
+
+                    if(nbrCell == 1){
+                        var cell = (direction === "row") ? rows[i].columns[memCell] : rows[memCell].columns[i];
+                        cell.value = line_pos[p];
+                        gridUpdated=true;
+                    }
+                }
+            }
+            return true;
+        };
+
+        if(!lineSearch("row"))
+            return [false, null];
+
+        if(!lineSearch("column"))
+            return [false, null];
+
     	//case
-		for(var i=0; i<9; i++)
+		for(var i = 0; i < 9; i++)
 		{
-			var case_pos = case_possibilities(rows, i);			
-			var c_line = Math.floor(i/3);
-			var c_column = i%3;
-			c_line*=3;
-			c_column*=3;
+            var edges = getCaseEdgesById(i);
+			var cellPossibilities = casePossibilities(rows, edges);
 			//for each possible value of this case
-			for(var k=0; k<case_pos.length; k++)
+			for(var k=0; k<cellPossibilities.length; k++)
 			{
-				var cpt = 0;
-				var mem = 0;
-				for(var j=0; (j<9 && cpt<2); j++)
-					if(rows[c_line + Math.floor(j/3)].columns[c_column + (j%3)].value == ""){
+				var nbrCell = 0;
+				var memCell = 0;
+				for(var j = 0; (j < 9 && nbrCell < 2); j++)
+					if(rows[edges.row.min + Math.floor(j/3)].columns[edges.column.min + (j%3)].value == ""){
 						var m;
-						for(m=0; (m<rows[c_line + Math.floor(j/3)].columns[c_column + (j%3)].possibilities.length && rows[c_line + Math.floor(j/3)].columns[c_column + (j%3)].possibilities[m] != case_pos[k]); m++);
-						if(rows[c_line + Math.floor(j/3)].columns[c_column + (j%3)].possibilities[m] == case_pos[k])
-						{	
-							cpt++;
-							mem = j;
-						}
-					}				
-				if(cpt == 0)
-					return [false, stats];
-				if(cpt  == 1)
+                        var cell = rows[edges.row.min + Math.floor(j/3)].columns[edges.column.min + (j%3)];
+						for(m=0; (m < cell.possibilities.length && cell.possibilities[m] != cellPossibilities[k]); m++);
+                            if(cell.possibilities[m] == cellPossibilities[k]){
+                                nbrCell++;
+                                memCell = j;
+                            }
+					}
+
+				if(nbrCell == 0)
+					return [false, null];
+
+                if(nbrCell  == 1)
 				{
-					rows[c_line + Math.floor(mem/3)].columns[c_column + (mem%3)].value = case_pos[k];
-					stats=true;										
+					rows[edges.row.min + Math.floor(memCell/3)].columns[edges.column.min + (memCell%3)].value = cellPossibilities[k];
+					gridUpdated=true;
 				}
 			}
 		}
-	return [true, stats];  	
+	return [true, gridUpdated];
     }
-    
-	function solve_rows(rows){
-    	var stat1 = true;
-		var stat2 = true;
-		while(stat1){
-			stat1 = false;
-			while(stat2){
-				stat2 = false;
-				for(var l=0; l<9; l++)
-					for(var c=0; c<9; c++)
-						if(rows[l].columns[c].value == ""){																				
-							rows[l].columns[c].possibilities = jQuery.extend(true, [], get_possibilities(rows,l,c));													
-							possibilities_length = rows[l].columns[c].possibilities.length;							
-							if(possibilities_length == 0){								
-								return false;	
-								}		
-							if(possibilities_length == 1){
-								stat1 = true;
-								stat2 = true;
-								rows[l].columns[c].value = rows[l].columns[c].possibilities[0];
-							}				
-							
-						}
-			}			
-			stat2 = true;
-			while(stat2){							
-				stat2 = false;
-				stats = search_unique_cases(rows);				
-				if(stats[1]){									
-					stat1 = true;
-					stat2 = true;
-				} 
-				if(stats[0] == false){
-					return false ;					
-				}								
-			}
-		}		
-		if(is_solved(rows)){			
-			return {'stat':true, 'rows':jQuery.extend(true, [], rows)};
+
+    /**
+     * Updates cells possibilities.
+     * @return {boolean}
+     */
+    function UpdatePossibilities(rows) {
+        for(var l=0; l<9; l++)
+            for(var c=0; c<9; c++)
+                if(rows[l].columns[c].value == ""){
+                    rows[l].columns[c].possibilities = angular.copy(getPossibilities(rows,l,c));
+                    var possibilitiesLength = rows[l].columns[c].possibilities.length;
+
+                    // grid cannot be solved, a cell has no possible values
+                    if(possibilitiesLength == 0)
+                        return false;
+
+                }
+        return true;
+    }
+
+    /**
+     * Solves the grid.
+     *      1. updates cell possibilities.
+     *      2. fill cells with unique values.
+     *      3. if grid updated, go back to (1.) else go to (4.)
+     *      4. backtrack algorithm (does not try the possibilities one by one,
+     *                              instead randomly choose possibilities).
+     */
+	function solveRows(rows){
+    	var state = true;
+		while(state){
+			state = false;
+
+            // try to fill unique values, otherwise return false if not solvable
+			if(!UpdatePossibilities(rows))
+                return false;
+
+            // check if has more unique values
+            var states = searchUniquePossibilities(rows);
+
+            // grid is unsolvable
+            if(states[0] == false)
+                return false;
+
+            // grid updated loop again
+            if(states[1])
+                state = true;
 		}
-		return random_solving(rows);
-		return {'stat' :false, 'rows':''};	
+
+		if(isSolved(rows))
+			return {state: true, rows: angular.copy(rows)};
+
+		return randomSolving(rows);
     }
-    
-    function random_solving(rows){
+
+    /**
+     * Tries to solve the grid randomly.
+     * Goes through all cells, and applies all possible values for this cell.
+     */
+    function randomSolving(rows){
     	for(var l=0; l<9; l++)
     		for(var c=0; c<9; c++)
-    			if(rows[l].columns[c].value == ""){
-    				rows[l].columns[c].possibilities = jQuery.extend(true, [], get_possibilities(rows,l,c));
-    				nbr_pos = rows[l].columns[c].possibilities.length;    				
-    				while(nbr_pos>0){
-    					r_clone = jQuery.extend(true, [], rows);
-    					var r = Math.floor((Math.random()*10)+1)%nbr_pos;    					    				
-    					r_clone[l].columns[c].value = r_clone[l].columns[c].possibilities[r]
-    					results = solve_rows(r_clone);
-    					if(results['stat']){					   		
-					   		return {'stat':true, 'rows':jQuery.extend(true, [], results['rows'])};
+    			if(rows[l].columns[c].value == ""){ // if cell is empty
+                    // get possibilities for this cell
+    				rows[l].columns[c].possibilities = angular.copy(getPossibilities(rows, l, c));
+    				var nbr_pos = rows[l].columns[c].possibilities.length;
+    				while(nbr_pos>0){ // try all possibilities
+    					var rows_clone = angular.copy(rows);
+    					var randomPossibility = Math.floor((Math.random() * 10) + 1) % nbr_pos;
+    					rows_clone[l].columns[c].value = rows_clone[l].columns[c].possibilities[randomPossibility];
+    					var results = solveRows(rows_clone); // try t solve for this random possibility
+
+    					if(results['state']){
+					   		return {'state':true, 'rows': results['rows']};
 					   	}  
 					   	else{
-				   			r_clone[l].columns[c].possibilities.splice(r,1);
+                            // if the grid is not solved, remove this from possible values
+                            // of this cell and try again
+				   			rows_clone[l].columns[c].possibilities.splice(randomPossibility,1);
 				   			nbr_pos --;				   			
 				   		}    					
     				}
     			}
-    	return {'stat' :false, 'rows':''};		
+
+        // after exhausting all possibilities of all cells, the grid is not solvable.
+    	return {'state' :false, 'rows':''};
     }
     
-	$scope.get_value = function(value, row_id, column_id) {		
-		if ($scope.rows[row_id-1].columns[column_id-1].class == "correct")
-			$scope.rows[row_id-1].columns[column_id-1].value = $scope.rows_save[row_id-1].columns[column_id-1].value;		 								
-		if (!(value >= 1 && value <= 9)){
+	$scope.getValue = function(value, rowId, columnId) {
+        rowId -= 1;
+        columnId -= 1;
+		if ($scope.rows[rowId].columns[columnId].class == "correct")
+			$scope.rows[rowId].columns[columnId].value = $scope.rows_save[rowId].columns[columnId].value;
+
+        if (!(value >= 1 && value <= 9)){
 			return "";		
 		}		
 		return value;		
-	}
-	
-	$scope.check_class = function(value) {
-		return (value=="correct") ? true : false;  
-	}
-	
+	};
+
 	$scope.init = function() {		
 		$scope.rows = jQuery.extend(true, [], $scope.rows_save);
-	}
+	};
 	
 	$scope.clear = function() {		
-		$scope.rows = jQuery.extend(true, [], $scope.rows_clear);
-	}
+		$scope.rows = createEmptyRows();
+	};
 
-	function gen_rand_list(nbr_rands){
-		rand_list = []
-		while(rand_list.length < nbr_rands){
-			rand_i = Math.ceil(Math.random()*9) - 1;
-			if (rand_list.indexOf(rand_i) === -1){
-				rand_list.push(rand_i);
+	function genRandList(nbrRandom){
+		var randList = [];
+		while(randList.length < nbrRandom){
+			var rand_i = Math.ceil(Math.random()*9) - 1;
+			if (randList.indexOf(rand_i) === -1){
+				randList.push(rand_i);
 			}
 		}		
-		return rand_list;
+		return randList;
 	}
-	
+
+    /**
+     * Generates a new grid.
+     */
 	$scope.generate = function() {		
-		var rows = jQuery.extend(true, [], $scope.rows_clear);
-		var results = solve_rows(rows);
-		if(results['stat']){
+		var rows = createEmptyRows();
+		var results = solveRows(rows);
+		if(results['state']){
 			alert("creating new grid");			
-			rows = jQuery.extend(true, [], results['rows']);
+			rows = angular.copy(results['rows']);
 			for (var l=0; l<9; l++){
 				for(var c=0; c<9; c++){				
 					rows[l].columns[c].class = "correct";				
 				}
 			}
 			//first we generate a sequence of the lines [1,2, 3, ..., 9]
-			rand_squares = gen_rand_list(9);				
+			var randomCells = genRandList(9);
 			//delete 8 values from 3 lines
 			for (var l=0; l<3; l++){
-				rand_indices = gen_rand_list(8);				
+				randomIndices = genRandList(8);
 				for (var c=0; c<8; c++){
-					rows[rand_squares[l]].columns[rand_indices[c]].class = "";
-					rows[rand_squares[l]].columns[rand_indices[c]].value = "";					
+					rows[randomCells[l]].columns[randomIndices[c]].class = "";
+					rows[randomCells[l]].columns[randomIndices[c]].value = "";
 				}
 			}
 			//delete 6 values from 2 lines
 			for (var l=3; l<5; l++){
-				rand_indices = gen_rand_list(6);
+				randomIndices = genRandList(6);
 				for (var c=0; c<6; c++){
-					rows[rand_squares[l]].columns[rand_indices[c]].class = "";
-					rows[rand_squares[l]].columns[rand_indices[c]].value = "";
+					rows[randomCells[l]].columns[randomIndices[c]].class = "";
+					rows[randomCells[l]].columns[randomIndices[c]].value = "";
 				}
 			}
 			//delete 4 values from 2 lines
 			for (var l=5; l<7; l++){
-				rand_indices = gen_rand_list(4);
+				randomIndices = genRandList(4);
 				for (var c=0; c<4; c++){
-					rows[rand_squares[l]].columns[rand_indices[c]].class = "";
-					rows[rand_squares[l]].columns[rand_indices[c]].value = "";
+					rows[randomCells[l]].columns[randomIndices[c]].class = "";
+					rows[randomCells[l]].columns[randomIndices[c]].value = "";
 				}
 			}
 			//delete 3 values from 2 square
 			for (var l=7; l<9; l++){
-				rand_indices = gen_rand_list(3);
+				var randomIndices = genRandList(3);
 				for (var c=0; c<3; c++){
-					rows[rand_squares[l]].columns[rand_indices[c]].class = "";
-					rows[rand_squares[l]].columns[rand_indices[c]].value = "";
+					rows[randomCells[l]].columns[randomIndices[c]].class = "";
+					rows[randomCells[l]].columns[randomIndices[c]].value = "";
 				}
 			}			
 		}
-		$scope.rows_save = jQuery.extend(true, [], rows);
-		$scope.rows = jQuery.extend(true, [], rows);						
-	}	
+		$scope.rows_save = angular.copy(rows);
+		$scope.rows = angular.copy(rows);
+	};
 
-	$scope.check = function(row_id, column_id) {			
-		row_id = row_id - 1;
-		column_id = column_id - 1;		
-		value = $scope.rows[row_id].columns[column_id].value
-		if ($scope.rows[row_id].columns[column_id].class == "correct")
-			return 
+	$scope.check = function(rowId, columnId) {
+		rowId = rowId - 1;
+		columnId = columnId - 1;
+		var value = $scope.rows[rowId].columns[columnId].value;
+
+		if ($scope.rows[rowId].columns[columnId].class == "correct")
+			return;
+		
 		if (!(!isNaN(parseFloat(value)) && isFinite(value))){
-			$scope.rows[row_id].columns[column_id].class = change_class($scope.rows[row_id].columns[column_id].class, "error");
-			$scope.rows[row_id].columns[column_id].value = '';
+			$scope.rows[rowId].columns[columnId].class = changeClass($scope.rows[rowId].columns[columnId].class, "error");
+			$scope.rows[rowId].columns[columnId].value = '';
 			return 
 		}
 			
-		$scope.rows[row_id].columns[column_id].class =  change_class($scope.rows[row_id].columns[column_id].class,"valide");
-		for(var j=0; j<9; j++)
+		$scope.rows[rowId].columns[columnId].class =  changeClass($scope.rows[rowId].columns[columnId].class,"valide");
+		for(var j = 0; j < 9; j++)
 	    {
-	        if((value == $scope.rows[row_id].columns[j].value) && column_id != j){
-	            $scope.rows[row_id].columns[column_id].class = change_class($scope.rows[row_id].columns[column_id].class,"error");
-	            $scope.rows[row_id].columns[j].class = change_class($scope.rows[row_id].columns[j].class, "error");
+	        if((value == $scope.rows[rowId].columns[j].value) && columnId != j){
+	            $scope.rows[rowId].columns[columnId].class = changeClass($scope.rows[rowId].columns[columnId].class,"error");
+	            $scope.rows[rowId].columns[j].class = changeClass($scope.rows[rowId].columns[j].class, "error");
 	           }
 	    }
-	    for(var j=0; j<9; j++)
+	    for(var j = 0; j < 9; j++)
 	    {
-	    	if((value == $scope.rows[j].columns[column_id].value) && row_id != j){	        
-	            $scope.rows[row_id].columns[column_id].class = change_class($scope.rows[row_id].columns[column_id].class, "error");
-	            $scope.rows[j].columns[column_id].class = change_class("error", $scope.rows[j].columns[column_id].class);
+	    	if((value == $scope.rows[j].columns[columnId].value) && rowId != j){
+	            $scope.rows[rowId].columns[columnId].class = changeClass($scope.rows[rowId].columns[columnId].class, "error");
+	            $scope.rows[j].columns[columnId].class = changeClass("error", $scope.rows[j].columns[columnId].class);
 	           }
 	    }
-	    var edges = get_row_column_edges(row_id, column_id)
-	    var row_min = edges[0];
-	    var row_max = edges[1];	    
-	    var column_min = edges[2];
-	    var column_max = edges[3];
+	    var edges = getCaseEdgesByCoords(rowId, columnId);
 	    		
-        for(var j=row_min; j<row_max; j++)
-            for(var k=column_min; k<column_max; k++)
+        for(var j = edges.row.min; j < edges.row.max; j++)
+            for(var k=edges.column.min; k<edges.column.max; k++)
             {
-                if((value == $scope.rows[j].columns[k].value) && j != row_id && k != column_id){
-					$scope.rows[row_id].columns[column_id].class = change_class($scope.rows[row_id].columns[column_id].class,"error");
-	            	$scope.rows[j].columns[k].class = change_class($scope.rows[j].columns[k].class, "error");
+                if((value == $scope.rows[j].columns[k].value) && j != rowId && k != columnId){
+					$scope.rows[rowId].columns[columnId].class = changeClass($scope.rows[rowId].columns[columnId].class,"error");
+	            	$scope.rows[j].columns[k].class = changeClass($scope.rows[j].columns[k].class, "error");
 	            	}
             }	    	   		
    	};
@@ -456,18 +472,18 @@ Sudoku.controller('SudokuController', function SudokuController($scope, $http) {
 	$scope.possibilities = function(row_id, column_id) {
 		row_id = row_id - 1;
 		column_id = column_id - 1;
-		pos = get_possibilities($scope.rows, row_id, column_id);		
-		$scope.rows[row_id].columns[column_id].possibilities = jQuery.extend(true, [], pos);			
-		$scope.current_possibilities = jQuery.extend(true, [], pos);	
+		var pos = getPossibilities($scope.rows, row_id, column_id);
+		$scope.rows[row_id].columns[column_id].possibilities = angular.copy(pos);
+		$scope.currentPossibilities = angular.copy(pos);
 	};
 	
 	$scope.solve = function() {
-		results = solve_rows($scope.rows);
-		if(results['stat']){
+		var results = solveRows($scope.rows);
+		if(results['state']){
 			$scope.rows = jQuery.extend(true, [], results['rows']);
 			alert("solved");			
 		}
 		else
 			alert("can't be solved")
-	}
+	};
 }); 
